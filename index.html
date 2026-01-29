@@ -2,116 +2,126 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Strafing Lab - Precision Gap</title>
+    <title>Strafing Lab - Pro Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .dashboard { background: #1e1e1e; padding: 2rem; border-radius: 15px; text-align: center; width: 420px; border: 1px solid #333; }
-        .nav { margin-bottom: 20px; }
-        .nav a { color: #2196f3; text-decoration: none; font-weight: bold; }
-        .keys { display: flex; gap: 20px; justify-content: center; margin: 25px 0; }
-        .key { width: 80px; height: 80px; border: 2px solid #333; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: bold; background: #252525; transition: 0.05s; color: #888; }
-        .active { background: #4caf50; color: white; border-color: #81c784; transform: scale(0.95); box-shadow: 0 0 20px rgba(76, 175, 80, 0.3); }
-        .overlap-active { background: #f44336 !important; border-color: #ff5252 !important; box-shadow: 0 0 20px rgba(244, 67, 54, 0.5) !important; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; border-top: 1px solid #333; padding-top: 20px; }
-        .stat-box { background: #2b2b2b; padding: 15px; border-radius: 8px; }
-        .stat-val { display: block; font-size: 1.4rem; font-weight: bold; color: #fff; margin-top: 5px; }
-        .feedback { font-size: 1.2rem; height: 30px; margin-bottom: 10px; font-weight: 700; letter-spacing: 1px; }
-        .history { margin-top: 20px; font-size: 0.8rem; color: #666; text-align: left; max-height: 80px; overflow-y: hidden; }
-        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
-        button { padding: 12px 24px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; text-transform: uppercase; transition: 0.2s; }
+        body { background: #121212; color: #e0e0e0; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .dashboard { background: #1e1e1e; padding: 1.5rem; border-radius: 15px; text-align: center; width: 700px; border: 1px solid #333; }
+        .keys { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
+        .key { width: 60px; height: 60px; border: 2px solid #333; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; background: #252525; transition: 0.05s; }
+        .active { background: #4caf50; color: white; transform: scale(0.95); }
+        .overlap-active { background: #f44336 !important; }
+        .chart-container { position: relative; height: 250px; width: 100%; margin-top: 20px; background: #181818; border-radius: 10px; padding: 10px; box-sizing: border-box; }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0; }
+        .stat-box { background: #2b2b2b; padding: 10px; border-radius: 8px; font-size: 0.9rem; }
+        .stat-val { display: block; font-size: 1.2rem; font-weight: bold; color: #fff; }
+        .feedback { font-size: 1.2rem; height: 30px; font-weight: bold; margin-bottom: 10px; }
+        .controls { margin-bottom: 20px; display: flex; gap: 10px; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         #start-btn { background: #4caf50; color: white; }
-        #reset-btn { background: #444; color: #eee; }
+        #reset-btn { background: #444; color: white; }
     </style>
 </head>
 <body>
 
-    <div class="nav"><a href="challenge.html">Switch to Challenge Mode →</a></div>
-    
     <div class="controls">
-        <button id="start-btn">Enable Audio</button>
-        <button id="reset-btn">Reset Stats</button>
+        <button id="start-btn">ENABLE AUDIO</button>
+        <button id="reset-btn">RESET STATS</button>
     </div>
 
     <div class="dashboard">
-        <div class="feedback" id="feedback">READY</div>
+        <div id="feedback" class="feedback">READY</div>
         <div class="keys">
             <div id="key-a" class="key">A</div>
             <div id="key-d" class="key">D</div>
         </div>
+
         <div class="stats-grid">
-            <div class="stat-box">Total Strafes<span id="stat-total" class="stat-val">0</span></div>
-            <div class="stat-box">Avg Gap<span id="stat-avg" class="stat-val">0ms</span></div>
+            <div class="stat-box">Strafes<span id="stat-total" class="stat-val">0</span></div>
+            <div class="stat-box">Median Gap<span id="stat-median" class="stat-val">0ms</span></div>
+            <div class="stat-box">Overlap %<span id="stat-overlap-pc" class="stat-val">0%</span></div>
         </div>
-        <div class="history" id="history">Last 5: </div>
+
+        <div class="chart-container">
+            <canvas id="timingChart"></canvas>
+        </div>
     </div>
 
 <script>
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
     let lastKeyReleased = null;
     let releaseTime = 0;
-    let keysCurrentlyDown = new Set();
+    let keysDown = new Set();
     let strafeData = [];
+    let overlapCount = 0;
+
+    // --- CHART SETUP ---
+    const chartCtx = document.getElementById('timingChart').getContext('2d');
+    const timingChart = new Chart(chartCtx, {
+        type: 'scatter',
+        data: { datasets: [{
+            label: 'Timing (ms)',
+            data: [],
+            backgroundColor: (ctx) => {
+                const val = ctx.raw ? ctx.raw.y : 0;
+                if (val < 0) return '#f44336'; // Overlap
+                return val <= 10 ? '#4caf50' : '#ff9800'; // Perfect vs Late
+            }
+        }]},
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { display: false },
+                y: { 
+                    min: -50, max: 100,
+                    grid: { color: '#333' },
+                    ticks: { color: '#888', callback: (v) => v + 'ms' }
+                }
+            },
+            plugins: { legend: { display: false } },
+            animation: { duration: 200 }
+        }
+    });
 
     function playSound(type) {
-        if (ctx.state === 'suspended') return;
-        const now = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
+        if (ctxAudio.state === 'suspended') return;
+        const now = ctxAudio.currentTime;
+        const osc = ctxAudio.createOscillator();
+        const g = ctxAudio.createGain();
+        
         if (type === 'perfect') {
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(880, now);
-            gain.gain.setValueAtTime(0.1, now);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+            osc.type = 'sine'; osc.frequency.setValueAtTime(880, now);
+            g.gain.setValueAtTime(0.1, now);
         } else if (type === 'late') {
-            // Irritating dull thud
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(150, now);
-            gain.gain.setValueAtTime(0.2, now);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
-        } else if (type === 'overlap') {
-            // Very irritating buzz
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(100, now);
-            osc.frequency.linearRampToValueAtTime(50, now + 0.2);
-            gain.gain.setValueAtTime(0.15, now);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(200, now);
+            g.gain.setValueAtTime(0.2, now);
+        } else { // Overlap
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(80, now);
+            g.gain.setValueAtTime(0.2, now);
         }
-
-        osc.connect(gain).connect(ctx.destination);
-        osc.start();
-        osc.stop(now + 0.4);
+        
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+        osc.connect(g).connect(ctxAudio.destination);
+        osc.start(); osc.stop(now + 0.3);
     }
 
     document.addEventListener('keydown', (e) => {
         const key = e.key.toLowerCase();
-        if ((key === 'a' || key === 'd') && !keysCurrentlyDown.has(key)) {
+        if ((key === 'a' || key === 'd') && !keysDown.has(key)) {
             const pressTime = performance.now();
-            keysCurrentlyDown.add(key);
-            
-            const el = document.getElementById(`key-${key}`);
-            el.classList.add('active');
+            keysDown.add(key);
+            document.getElementById(`key-${key}`).classList.add('active');
 
-            // OVERLAP CHECK
-            if (keysCurrentlyDown.size > 1) {
-                el.classList.add('overlap-active');
-                document.getElementById('feedback').textContent = "OVERLAP!";
-                document.getElementById('feedback').style.color = "#f44336";
-                playSound('overlap');
+            if (keysDown.size > 1) {
+                document.getElementById(`key-${key}`).classList.add('overlap-active');
+                handleHit(-25, "OVERLAP!"); // Negative value for overlap
                 return;
             }
 
-            // TIMING LOGIC
             if (lastKeyReleased && lastKeyReleased !== key) {
                 const gap = pressTime - releaseTime;
-
-                if (gap < 300) {
-                    strafeData.push(gap);
-                    updateStats(gap);
-                } else {
-                    document.getElementById('feedback').textContent = "IDLE";
-                    document.getElementById('feedback').style.color = "#888";
-                }
+                if (gap < 400) handleHit(gap);
             }
         }
     });
@@ -121,48 +131,51 @@
         if (key === 'a' || key === 'd') {
             releaseTime = performance.now();
             lastKeyReleased = key;
-            keysCurrentlyDown.delete(key);
-            const el = document.getElementById(`key-${key}`);
-            el.classList.remove('active', 'overlap-active');
+            keysDown.delete(key);
+            document.getElementById(`key-${key}`).classList.remove('active', 'overlap-active');
         }
     });
 
-    function updateStats(gap) {
-        const total = strafeData.length;
-        const avg = strafeData.reduce((a, b) => a + b, 0) / total;
+    function handleHit(gap, overrideText) {
+        const fb = document.getElementById('feedback');
         
-        document.getElementById('stat-total').textContent = total;
-        document.getElementById('stat-avg').textContent = avg.toFixed(1) + 'ms';
-        
-        const feedbackEl = document.getElementById('feedback');
-        if (gap <= 10) {
-            feedbackEl.textContent = "PERFECT";
-            feedbackEl.style.color = "#4caf50";
-            playSound('perfect');
+        if (gap < 0) {
+            fb.textContent = overrideText; fb.style.color = "#f44336";
+            playSound('overlap');
+            overlapCount++;
         } else {
-            feedbackEl.textContent = `LATE: ${gap.toFixed(0)}ms`;
-            feedbackEl.style.color = "#ff9800";
-            playSound('late');
+            fb.textContent = gap <= 10 ? "PERFECT" : `${gap.toFixed(0)}ms LATE`;
+            fb.style.color = gap <= 10 ? "#4caf50" : "#ff9800";
+            playSound(gap <= 10 ? 'perfect' : 'late');
+            strafeData.push(gap);
         }
 
-        // History list
-        const history = strafeData.slice(-5).reverse().map(t => t.toFixed(0) + 'ms').join(', ');
-        document.getElementById('history').textContent = `Last 5: ${history}`;
+        // Update Chart
+        timingChart.data.datasets[0].data.push({ x: Date.now(), y: gap });
+        if (timingChart.data.datasets[0].data.length > 30) timingChart.data.datasets[0].data.shift();
+        timingChart.update('none');
+
+        // Update Stats
+        const total = strafeData.length + overlapCount;
+        document.getElementById('stat-total').textContent = total;
+        document.getElementById('stat-overlap-pc').textContent = Math.round((overlapCount/total)*100) + "%";
+        
+        if (strafeData.length > 0) {
+            const sorted = [...strafeData].sort((a,b) => a-b);
+            document.getElementById('stat-median').textContent = sorted[Math.floor(sorted.length/2)].toFixed(0) + "ms";
+        }
     }
 
     document.getElementById('reset-btn').onclick = () => {
-        strafeData = [];
-        lastKeyReleased = null;
+        strafeData = []; overlapCount = 0;
+        timingChart.data.datasets[0].data = [];
+        timingChart.update();
         document.getElementById('stat-total').textContent = "0";
-        document.getElementById('stat-avg').textContent = "0ms";
-        document.getElementById('feedback').textContent = "RESET";
-        document.getElementById('history').textContent = "Last 5: ";
+        document.getElementById('stat-median').textContent = "0ms";
+        document.getElementById('stat-overlap-pc').textContent = "0%";
     };
 
-    document.getElementById('start-btn').onclick = () => {
-        ctx.resume();
-        document.getElementById('start-btn').textContent = "Audio Ready";
-    };
+    document.getElementById('start-btn').onclick = () => ctxAudio.resume();
 </script>
 </body>
 </html>
