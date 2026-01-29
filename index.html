@@ -2,186 +2,82 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pro Counter-Strafing: 50 Challenge</title>
+    <title>Strafing Lab - Practice</title>
     <style>
-        body { background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .dashboard { background: #1e1e1e; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; width: 420px; border: 1px solid #333; }
+        body { background: #121212; color: #e0e0e0; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .dashboard { background: #1e1e1e; padding: 2rem; border-radius: 15px; text-align: center; width: 400px; border: 1px solid #333; }
+        .nav { margin-bottom: 20px; }
+        .nav a { color: #2196f3; text-decoration: none; font-weight: bold; margin: 0 10px; }
         .keys { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
-        .key { width: 75px; height: 75px; border: 2px solid #333; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold; background: #252525; transition: 0.05s; }
-        .active { background: #4caf50; color: white; border-color: #81c784; transform: translateY(2px); }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; border-top: 1px solid #333; padding-top: 20px; }
-        .stat-box { background: #2b2b2b; padding: 12px; border-radius: 8px; }
-        .stat-val { display: block; font-size: 1.3rem; font-weight: bold; color: #fff; }
-        .feedback { font-size: 1.2rem; height: 30px; margin: 15px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-        .perfect { color: #4caf50; text-shadow: 0 0 10px rgba(76, 175, 80, 0.4); }
-        .late { color: #ff9800; }
-        .overlap { color: #f44336; }
-        .btn-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
-        button { padding: 12px 20px; font-size: 0.9rem; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }
-        #start-audio { background: #444; color: white; }
-        #challenge-btn { background: #2196f3; color: white; }
-        #challenge-btn:hover { background: #1976d2; }
-        #challenge-btn:disabled { background: #555; cursor: not-allowed; }
-        .progress-bar { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 10px; overflow: hidden; }
-        #progress-fill { width: 0%; height: 100%; background: #2196f3; transition: 0.1s; }
+        .key { width: 70px; height: 70px; border: 2px solid #333; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; background: #252525; }
+        .active { background: #4caf50; color: white; box-shadow: 0 0 15px rgba(76, 175, 80, 0.5); }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; border-top: 1px solid #333; padding-top: 20px; }
+        .stat-box { background: #2b2b2b; padding: 10px; border-radius: 5px; }
+        .stat-val { display: block; font-size: 1.2rem; font-weight: bold; color: #fff; }
+        .feedback { font-size: 1.1rem; height: 25px; margin: 15px 0; font-weight: 600; }
+        .perfect { color: #4caf50; }
+        #start-btn { padding: 10px 20px; cursor: pointer; background: #4caf50; color: white; border: none; border-radius: 5px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
-
-    <div class="btn-group">
-        <button id="start-audio">ENABLE AUDIO</button>
-        <button id="challenge-btn">START 50 STRAFE CHALLENGE</button>
-    </div>
-
+    <div class="nav"><a href="challenge.html">Go to Challenge Mode →</a></div>
+    <button id="start-btn">Start Practice</button>
     <div class="dashboard">
-        <div class="feedback" id="feedback">READY</div>
-        
-        <div class="keys">
-            <div id="key-A" class="key">A</div>
-            <div id="key-D" class="key">D</div>
-        </div>
-
-        <div class="progress-bar"><div id="progress-fill"></div></div>
-
+        <div class="feedback" id="feedback">PRACTICE MODE</div>
+        <div class="keys"><div id="key-a" class="key">A</div><div id="key-d" class="key">D</div></div>
         <div class="stats-grid">
-            <div class="stat-box">Strafes<span id="stat-total" class="stat-val">0 / 50</span></div>
-            <div class="stat-box">Perfect<span id="stat-perfect" class="stat-val">0</span></div>
+            <div class="stat-box">Total Strafes<span id="stat-total" class="stat-val">0</span></div>
             <div class="stat-box">Avg Gap<span id="stat-avg" class="stat-val">0ms</span></div>
-            <div class="stat-box">Median Gap<span id="stat-median" class="stat-val">0ms</span></div>
         </div>
     </div>
-
 <script>
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    let isChallengeActive = false;
-    let lastKey = null;
+    let lastKey = null; // Tracks the PREVIOUS key pressed
     let lastReleaseTime = 0;
     let keysDown = new Set();
-    
     let allTimes = [];
-    let perfectCount = 0;
-    const GOAL = 50;
 
-    const keyElements = { 'a': document.getElementById('key-A'), 'd': document.getElementById('key-D') };
-
-    function playSound(type) {
-        if (ctx.state === 'suspended') return;
-        const now = ctx.currentTime;
-
-        if (type === 'perfect') {
-            // Harmonic Chime (Two oscillators for "pleasant" richness)
-            [1200, 1500].forEach(freq => {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.frequency.setValueAtTime(freq, now);
-                gain.gain.setValueAtTime(0.05, now);
-                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-                osc.connect(gain).connect(ctx.destination);
-                osc.start();
-                osc.stop(now + 0.4);
-            });
-        } else if (type === 'tap') {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(300, now);
-            gain.gain.setValueAtTime(0.05, now);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
-            osc.connect(gain).connect(ctx.destination);
-            osc.start();
-            osc.stop(now + 0.1);
-        }
-    }
-
-    function calculateStats() {
-        if (allTimes.length === 0) return { avg: 0, median: 0 };
-        const avg = allTimes.reduce((a, b) => a + b, 0) / allTimes.length;
-        const sorted = [...allTimes].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-        return { avg, median };
-    }
-
-    function handleInput(key, type) {
-        if (type === 'keydown') {
-            if (!keysDown.has(key)) {
-                const now = performance.now();
-                keysDown.add(key);
-                keyElements[key].classList.add('active');
-
-                if (isChallengeActive && lastKey && lastKey !== key) {
-                    const diff = now - lastReleaseTime;
-                    const feedbackEl = document.getElementById('feedback');
-
-                    if (keysDown.size > 1) {
-                        feedbackEl.textContent = "OVERLAP!";
-                        feedbackEl.className = "feedback overlap";
-                    } else {
-                        allTimes.push(diff);
-                        const stats = calculateStats();
-                        
-                        if (diff <= 10) { 
-                            perfectCount++;
-                            feedbackEl.textContent = "PERFECT";
-                            feedbackEl.className = "feedback perfect";
-                            playSound('perfect');
-                        } else {
-                            feedbackEl.textContent = `${diff.toFixed(0)}ms`;
-                            feedbackEl.className = "feedback late";
-                            playSound('tap');
-                        }
-
-                        // Update UI
-                        document.getElementById('stat-total').textContent = `${allTimes.length} / ${GOAL}`;
-                        document.getElementById('stat-perfect').textContent = perfectCount;
-                        document.getElementById('stat-avg').textContent = stats.avg.toFixed(1) + 'ms';
-                        document.getElementById('stat-median').textContent = stats.median.toFixed(1) + 'ms';
-                        document.getElementById('progress-fill').style.width = (allTimes.length / GOAL * 100) + '%';
-
-                        if (allTimes.length >= GOAL) {
-                            isChallengeActive = false;
-                            feedbackEl.textContent = "CHALLENGE COMPLETE!";
-                            document.getElementById('challenge-btn').disabled = false;
-                            document.getElementById('challenge-btn').textContent = "RESTART CHALLENGE";
-                        }
-                    }
-                }
-                lastKey = key;
-            }
-        } else {
-            keysDown.delete(key);
-            keyElements[key].classList.remove('active');
-            lastReleaseTime = performance.now();
-        }
+    function playSound(freq) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.2);
     }
 
     document.addEventListener('keydown', (e) => {
         const key = e.key.toLowerCase();
-        if (key === 'a' || key === 'd') handleInput(key, 'keydown');
+        if ((key === 'a' || key === 'd') && !keysDown.has(key)) {
+            keysDown.add(key);
+            document.getElementById(`key-${key}`).classList.add('active');
+
+            // FILTER: Only count if it's the OPPOSITE of the last key
+            if (lastKey && lastKey !== key) {
+                const diff = performance.now() - lastReleaseTime;
+                if (keysDown.size === 1) { // No overlap
+                    allTimes.push(diff);
+                    document.getElementById('stat-total').textContent = allTimes.length;
+                    const avg = allTimes.reduce((a,b)=>a+b,0) / allTimes.length;
+                    document.getElementById('stat-avg').textContent = avg.toFixed(1) + 'ms';
+                    document.getElementById('feedback').textContent = diff <= 10 ? "PERFECT" : `${diff.toFixed(0)}ms`;
+                    playSound(diff <= 10 ? 1200 : 440);
+                }
+            }
+            lastKey = key;
+        }
     });
 
     document.addEventListener('keyup', (e) => {
         const key = e.key.toLowerCase();
-        if (key === 'a' || key === 'd') handleInput(key, 'keyup');
+        if (key === 'a' || key === 'd') {
+            keysDown.delete(key);
+            document.getElementById(`key-${key}`).classList.remove('active');
+            lastReleaseTime = performance.now();
+        }
     });
 
-    document.getElementById('challenge-btn').addEventListener('click', () => {
-        allTimes = [];
-        perfectCount = 0;
-        isChallengeActive = true;
-        lastKey = null;
-        document.getElementById('challenge-btn').disabled = true;
-        document.getElementById('stat-total').textContent = `0 / ${GOAL}`;
-        document.getElementById('progress-fill').style.width = '0%';
-        document.getElementById('feedback').textContent = "GO!";
-        ctx.resume();
-    });
-
-    document.getElementById('start-audio').addEventListener('click', () => {
-        ctx.resume();
-        document.getElementById('start-audio').style.opacity = '0.5';
-        document.getElementById('start-audio').textContent = 'AUDIO ON';
-    });
+    document.getElementById('start-btn').onclick = () => { ctx.resume(); document.getElementById('start-btn').style.display='none'; };
 </script>
 </body>
 </html>
