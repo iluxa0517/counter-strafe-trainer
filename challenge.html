@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Strafing Lab - Challenge</title>
+    <style>
+        /* Same CSS as index, adding progress bar */
+        body { background: #121212; color: #e0e0e0; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .dashboard { background: #1e1e1e; padding: 2rem; border-radius: 15px; text-align: center; width: 400px; border: 1px solid #333; }
+        .nav { margin-bottom: 20px; }
+        .nav a { color: #2196f3; text-decoration: none; font-weight: bold; }
+        .keys { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
+        .key { width: 70px; height: 70px; border: 2px solid #333; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; background: #252525; }
+        .active { background: #2196f3; color: white; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; border-top: 1px solid #333; padding-top: 20px; }
+        .stat-box { background: #2b2b2b; padding: 10px; border-radius: 5px; }
+        .stat-val { display: block; font-size: 1.2rem; font-weight: bold; }
+        #challenge-btn { padding: 15px 30px; font-weight: bold; background: #2196f3; border: none; border-radius: 5px; color: white; cursor: pointer; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="nav"><a href="index.html">← Back to Practice</a></div>
+    <button id="challenge-btn">START 50 STRAFE CHALLENGE</button>
+    <div class="dashboard">
+        <div id="feedback">READY?</div>
+        <div class="keys"><div id="key-a" class="key">A</div><div id="key-d" class="key">D</div></div>
+        <div class="stats-grid">
+            <div class="stat-box">Progress<span id="stat-total">0 / 50</span></div>
+            <div class="stat-box">Median<span id="stat-median">0ms</span></div>
+            <div class="stat-box">Average<span id="stat-avg">0ms</span></div>
+            <div class="stat-box">Perfects<span id="stat-perfect">0</span></div>
+        </div>
+    </div>
+<script>
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let active = false;
+    let lastKey = null;
+    let lastReleaseTime = 0;
+    let keysDown = new Set();
+    let allTimes = [];
+    let perfects = 0;
+
+    function playPerfect() {
+        const now = ctx.currentTime;
+        [1000, 1300].forEach(f => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.frequency.setValueAtTime(f, now);
+            g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+            o.connect(g).connect(ctx.destination);
+            o.start(); o.stop(now + 0.3);
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (active && (key === 'a' || key === 'd') && !keysDown.has(key)) {
+            keysDown.add(key);
+            document.getElementById(`key-${key}`).classList.add('active');
+            
+            if (lastKey && lastKey !== key && keysDown.size === 1) {
+                const diff = performance.now() - lastReleaseTime;
+                allTimes.push(diff);
+                if(diff <= 10) { perfects++; playPerfect(); }
+
+                // UI Updates
+                document.getElementById('stat-total').textContent = `${allTimes.length} / 50`;
+                document.getElementById('stat-perfect').textContent = perfects;
+                
+                const avg = allTimes.reduce((a,b)=>a+b,0) / allTimes.length;
+                document.getElementById('stat-avg').textContent = avg.toFixed(1) + 'ms';
+                
+                const sorted = [...allTimes].sort((a,b)=>a-b);
+                const median = sorted[Math.floor(sorted.length/2)];
+                document.getElementById('stat-median').textContent = median.toFixed(1) + 'ms';
+
+                if (allTimes.length >= 50) {
+                    active = false;
+                    document.getElementById('feedback').textContent = "FINISHED!";
+                    document.getElementById('challenge-btn').style.display = 'block';
+                }
+            }
+            lastKey = key;
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'a' || key === 'd') {
+            keysDown.delete(key);
+            document.getElementById(`key-${key}`).classList.remove('active');
+            lastReleaseTime = performance.now();
+        }
+    });
+
+    document.getElementById('challenge-btn').onclick = () => {
+        ctx.resume();
+        active = true;
+        allTimes = [];
+        perfects = 0;
+        lastKey = null;
+        document.getElementById('challenge-btn').style.display = 'none';
+        document.getElementById('feedback').textContent = "GO!";
+    };
+</script>
+</body>
+</html>
