@@ -2,105 +2,192 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Strafing Lab - Challenge</title>
+    <title>Strafing Lab - 50 Challenge Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Same CSS as index, adding progress bar */
-        body { background: #121212; color: #e0e0e0; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .dashboard { background: #1e1e1e; padding: 2rem; border-radius: 15px; text-align: center; width: 400px; border: 1px solid #333; }
+        body { background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .dashboard { background: #1e1e1e; padding: 2rem; border-radius: 15px; text-align: center; width: 650px; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .nav { margin-bottom: 20px; }
-        .nav a { color: #2196f3; text-decoration: none; font-weight: bold; }
-        .keys { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
-        .key { width: 70px; height: 70px; border: 2px solid #333; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; background: #252525; }
-        .active { background: #2196f3; color: white; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; border-top: 1px solid #333; padding-top: 20px; }
-        .stat-box { background: #2b2b2b; padding: 10px; border-radius: 5px; }
-        .stat-val { display: block; font-size: 1.2rem; font-weight: bold; }
-        #challenge-btn { padding: 15px 30px; font-weight: bold; background: #2196f3; border: none; border-radius: 5px; color: white; cursor: pointer; margin-bottom: 10px; }
+        .nav a { color: #2196f3; text-decoration: none; font-weight: bold; font-size: 0.9rem; }
+        .keys { display: flex; gap: 20px; justify-content: center; margin: 25px 0; }
+        .key { width: 75px; height: 75px; border: 2px solid #333; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold; background: #252525; color: #444; transition: 0.05s; }
+        .active { background: #2196f3; color: white; border-color: #64b5f6; }
+        .overlap-active { background: #f44336 !important; border-color: #ff5252 !important; box-shadow: 0 0 20px rgba(244, 67, 54, 0.4); }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; border-top: 1px solid #333; padding-top: 20px; }
+        .stat-box { background: #2b2b2b; padding: 10px; border-radius: 8px; }
+        .stat-val { display: block; font-size: 1.2rem; font-weight: bold; color: #fff; }
+        .feedback { font-size: 1.5rem; height: 40px; margin-bottom: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
+        .chart-container { height: 200px; width: 100%; margin-top: 20px; background: #181818; border-radius: 10px; padding: 10px; box-sizing: border-box; }
+        #challenge-btn { padding: 15px 40px; font-size: 1.1rem; font-weight: bold; background: #2196f3; border: none; border-radius: 8px; color: white; cursor: pointer; transition: 0.2s; }
+        #challenge-btn:hover { background: #1e88e5; transform: scale(1.02); }
     </style>
 </head>
 <body>
-    <div class="nav"><a href="index.html">← Back to Practice</a></div>
-    <button id="challenge-btn">START 50 STRAFE CHALLENGE</button>
+
+    <div class="nav"><a href="index.html">← Back to Practice Mode</a></div>
+    
+    <button id="challenge-btn">START CHALLENGE (50 STRAFES)</button>
+
     <div class="dashboard">
-        <div id="feedback">READY?</div>
-        <div class="keys"><div id="key-a" class="key">A</div><div id="key-d" class="key">D</div></div>
+        <div id="feedback" class="feedback">READY</div>
+        
+        <div class="keys">
+            <div id="key-a" class="key">A</div>
+            <div id="key-d" class="key">D</div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="challengeChart"></canvas>
+        </div>
+
         <div class="stats-grid">
-            <div class="stat-box">Progress<span id="stat-total">0 / 50</span></div>
-            <div class="stat-box">Median<span id="stat-median">0ms</span></div>
-            <div class="stat-box">Average<span id="stat-avg">0ms</span></div>
-            <div class="stat-box">Perfects<span id="stat-perfect">0</span></div>
+            <div class="stat-box">Progress<span id="stat-total" class="stat-val">0 / 50</span></div>
+            <div class="stat-box">Median<span id="stat-median" class="stat-val">0ms</span></div>
+            <div class="stat-box">Perfects<span id="stat-perfect" class="stat-val">0</span></div>
+            <div class="stat-box">Overlaps<span id="stat-overlap" class="stat-val">0</span></div>
         </div>
     </div>
-<script>
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    let active = false;
-    let lastKey = null;
-    let lastReleaseTime = 0;
-    let keysDown = new Set();
-    let allTimes = [];
-    let perfects = 0;
 
-    function playPerfect() {
-        const now = ctx.currentTime;
-        [1000, 1300].forEach(f => {
-            const o = ctx.createOscillator();
-            const g = ctx.createGain();
-            o.frequency.setValueAtTime(f, now);
-            g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
-            o.connect(g).connect(ctx.destination);
-            o.start(); o.stop(now + 0.3);
-        });
+<script>
+    const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+    let isChallengeActive = false;
+    let lastKeyReleased = null;
+    let releaseTime = 0;
+    let keysDown = new Set();
+    let strafeData = [];
+    let overlapCount = 0;
+    let perfectCount = 0;
+    const GOAL = 50;
+
+    // --- CHART SETUP ---
+    const chartCtx = document.getElementById('challengeChart').getContext('2d');
+    const challengeChart = new Chart(chartCtx, {
+        type: 'scatter',
+        data: { datasets: [{
+            label: 'Timing',
+            data: [],
+            backgroundColor: (ctx) => {
+                const val = ctx.raw ? ctx.raw.y : 0;
+                if (val < 0) return '#f44336'; 
+                return val <= 10 ? '#4caf50' : '#ff9800';
+            },
+            pointRadius: 6
+        }]},
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { min: 0, max: 50, grid: { color: '#333' }, title: { display: true, text: 'Strafe Number', color: '#666' } },
+                y: { min: -40, max: 100, grid: { color: '#333' }, ticks: { color: '#888', callback: v => v + 'ms' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    function playSound(type) {
+        if (ctxAudio.state === 'suspended') return;
+        const now = ctxAudio.currentTime;
+        const osc = ctxAudio.createOscillator();
+        const g = ctxAudio.createGain();
+
+        if (type === 'perfect') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(1000, now);
+            g.gain.setValueAtTime(0.1, now);
+        } else if (type === 'late') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(180, now);
+            g.gain.setValueAtTime(0.2, now);
+        } else {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(80, now);
+            g.gain.setValueAtTime(0.2, now);
+        }
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+        osc.connect(g).connect(ctxAudio.destination);
+        osc.start(); osc.stop(now + 0.3);
     }
 
     document.addEventListener('keydown', (e) => {
         const key = e.key.toLowerCase();
-        if (active && (key === 'a' || key === 'd') && !keysDown.has(key)) {
-            keysDown.add(key);
-            document.getElementById(`key-${key}`).classList.add('active');
-            
-            if (lastKey && lastKey !== key && keysDown.size === 1) {
-                const diff = performance.now() - lastReleaseTime;
-                allTimes.push(diff);
-                if(diff <= 10) { perfects++; playPerfect(); }
+        if (!isChallengeActive || (key !== 'a' && key !== 'd') || keysDown.has(key)) return;
 
-                // UI Updates
-                document.getElementById('stat-total').textContent = `${allTimes.length} / 50`;
-                document.getElementById('stat-perfect').textContent = perfects;
-                
-                const avg = allTimes.reduce((a,b)=>a+b,0) / allTimes.length;
-                document.getElementById('stat-avg').textContent = avg.toFixed(1) + 'ms';
-                
-                const sorted = [...allTimes].sort((a,b)=>a-b);
-                const median = sorted[Math.floor(sorted.length/2)];
-                document.getElementById('stat-median').textContent = median.toFixed(1) + 'ms';
+        const pressTime = performance.now();
+        keysDown.add(key);
+        const el = document.getElementById(`key-${key}`);
+        el.classList.add('active');
 
-                if (allTimes.length >= 50) {
-                    active = false;
-                    document.getElementById('feedback').textContent = "FINISHED!";
-                    document.getElementById('challenge-btn').style.display = 'block';
-                }
-            }
-            lastKey = key;
+        // OVERLAP LOGIC
+        if (keysDown.size > 1) {
+            el.classList.add('overlap-active');
+            recordHit(-30, "OVERLAP!");
+            return;
+        }
+
+        // GAP LOGIC
+        if (lastKeyReleased && lastKeyReleased !== key) {
+            const gap = pressTime - releaseTime;
+            if (gap < 400) recordHit(gap);
         }
     });
 
     document.addEventListener('keyup', (e) => {
         const key = e.key.toLowerCase();
         if (key === 'a' || key === 'd') {
+            releaseTime = performance.now();
+            lastKeyReleased = key;
             keysDown.delete(key);
-            document.getElementById(`key-${key}`).classList.remove('active');
-            lastReleaseTime = performance.now();
+            document.getElementById(`key-${key}`).classList.remove('active', 'overlap-active');
         }
     });
 
+    function recordHit(gap, overrideText) {
+        const fb = document.getElementById('feedback');
+        
+        if (gap < 0) {
+            fb.textContent = overrideText; fb.style.color = "#f44336";
+            overlapCount++;
+            playSound('overlap');
+        } else {
+            if (gap <= 10) perfectCount++;
+            fb.textContent = gap <= 10 ? "PERFECT" : `${gap.toFixed(0)}ms LATE`;
+            fb.style.color = gap <= 10 ? "#4caf50" : "#ff9800";
+            playSound(gap <= 10 ? 'perfect' : 'late');
+            strafeData.push(gap);
+        }
+
+        // Update Chart
+        const totalAttempts = strafeData.length + overlapCount;
+        challengeChart.data.datasets[0].data.push({ x: totalAttempts, y: gap });
+        challengeChart.update('none');
+
+        // Update Stats UI
+        document.getElementById('stat-total').textContent = `${totalAttempts} / ${GOAL}`;
+        document.getElementById('stat-perfect').textContent = perfectCount;
+        document.getElementById('stat-overlap').textContent = overlapCount;
+        
+        if (strafeData.length > 0) {
+            const sorted = [...strafeData].sort((a,b) => a-b);
+            document.getElementById('stat-median').textContent = sorted[Math.floor(sorted.length/2)].toFixed(0) + "ms";
+        }
+
+        if (totalAttempts >= GOAL) endChallenge();
+    }
+
+    function endChallenge() {
+        isChallengeActive = false;
+        document.getElementById('feedback').textContent = "CHALLENGE COMPLETE";
+        document.getElementById('challenge-btn').style.display = "block";
+        document.getElementById('challenge-btn').textContent = "RESTART CHALLENGE";
+    }
+
     document.getElementById('challenge-btn').onclick = () => {
-        ctx.resume();
-        active = true;
-        allTimes = [];
-        perfects = 0;
-        lastKey = null;
-        document.getElementById('challenge-btn').style.display = 'none';
+        ctxAudio.resume();
+        isChallengeActive = true;
+        strafeData = []; overlapCount = 0; perfectCount = 0;
+        lastKeyReleased = null;
+        challengeChart.data.datasets[0].data = [];
+        challengeChart.update();
+        document.getElementById('challenge-btn').style.display = "none";
         document.getElementById('feedback').textContent = "GO!";
+        document.getElementById('feedback').style.color = "#2196f3";
     };
 </script>
 </body>
